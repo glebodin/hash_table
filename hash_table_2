@@ -1,0 +1,169 @@
+#include <iostream>
+#include <vector>
+#include <set>
+#include <list>
+#include <iostream>
+#include <cstdlib>
+#include <functional>
+#include <stdexcept>
+#include <map>
+
+template<class KeyType, class ValueType, class Hash = std::hash<KeyType> > class
+HashMap {
+
+public:
+    typedef std::pair<const KeyType, ValueType> Cell;
+    typedef typename std::list<std::pair<const KeyType, ValueType>>::iterator iterator;
+    typedef typename std::list<std::pair<const KeyType, ValueType>>::const_iterator const_iterator;
+
+private :
+    size_t TableSize;
+    std::list<Cell> Data;
+    std::vector<std::list<std::pair<const KeyType, iterator>>> Buckets;
+    Hash Hasher;
+
+public:
+
+    bool empty() const{
+        return Data.size() == 0;
+    }
+
+    size_t size() const{
+        return Data.size();
+    }
+
+    Hash hash_function() const {
+        return Hasher;
+    }
+
+    HashMap(Hash h = Hash{}) : TableSize(2), Buckets(TableSize), Hasher(h) {}
+
+    iterator begin() {
+        return Data.begin();
+    }
+
+    iterator end() {
+        return Data.end();
+    }
+
+    const_iterator begin() const {
+        return Data.cbegin();
+    }
+
+    const_iterator end() const {
+        return Data.cend();
+    }
+
+    void clear() {
+        for (const auto& keyValuePair: Data) {
+            Buckets[Hasher(keyValuePair.first) % TableSize].clear();
+        }
+        Data.clear();
+    }
+
+    HashMap& operator=(const HashMap& other) {
+        TableSize = other.TableSize;
+        std::list<Cell> KeysInMap;
+        for (auto& key : other.Data) {
+            KeysInMap.push_back(key);
+        }
+        clear();
+        for (auto& key : KeysInMap) {
+            Data.push_back(key);
+        }
+        Hasher = other.Hasher;
+        Buckets.resize(TableSize);
+        fillTable();
+        return *this;
+    }
+
+    template<typename Iterator>
+    HashMap(Iterator begin, Iterator end, Hash h = Hash{}) {
+        Hasher = h;
+        for (Iterator a = begin; a != end; a++) {
+            Data.push_back(*a);
+        }
+        TableSize = Data.size() * 2;
+        Buckets.resize(TableSize);
+        fillTable();
+    }
+
+    HashMap(std::initializer_list<std::pair<const KeyType, ValueType>> a, Hash h = Hash{}) : HashMap(a.begin(), a.end(), h){}
+
+    void fillTable() {
+        for (iterator it = Data.begin(); it != Data.end(); it++) {
+            Buckets[Hasher(it->first) % TableSize].push_back({it->first, it});
+        }
+    }
+
+    const_iterator find(KeyType i) const {
+        int value = Hasher(i) % TableSize;
+        for (auto to : Buckets[value]) {
+            if (to.first == i) {
+                return to.second;
+            }
+        }
+        return Data.cend();
+    }
+
+    void insert(Cell need) {
+        if (find(need.first) != Data.end()) {
+            return;
+        }
+        Data.push_back(need);
+        Buckets[Hasher(need.first) % TableSize].push_back(make_pair(need.first, (--Data.end())));
+        rebuild();
+    }
+
+    void erase(const KeyType i) {
+        int value = Hasher(i) % TableSize;
+        for (auto it = Buckets[value].begin(); it != Buckets[value].end(); it++) {
+            auto to = *it;
+            if (to.first == i) {
+                Data.erase(to.second);
+                Buckets[value].erase(it);
+                return;
+            }
+        }
+    }
+
+    ValueType& operator[] (const KeyType i) {
+        for (auto& to : Buckets[Hasher(i) % this->TableSize]) {
+            if (to.first == i) {
+                return (to.second)->second;
+            }
+        }
+        insert({i, ValueType()});
+        return (--Data.end())->second;
+    }
+
+    const ValueType& at (const KeyType i) const{
+        for (auto& to : Buckets[Hasher(i) % this->TableSize]) {
+            if (to.first == i) {
+                return (to.second)->second;
+            }
+        }
+        throw std::out_of_range("-_-");
+    }
+
+    iterator find(const KeyType i) {
+        for (auto& to : Buckets[Hasher(i) % this->TableSize]) {
+            if ((to.second)->first == i) {
+                return to.second;
+            }
+        }
+        return Data.end();
+    }
+
+    void rebuild() {
+        if (TableSize < Data.size()) {
+            for (const auto& keyValuePair: Data) {
+                Buckets[Hasher(keyValuePair.first) % TableSize].clear();
+            }
+            TableSize *= 2;
+            Buckets.resize(TableSize);
+            fillTable();
+        }
+    }
+};
+
